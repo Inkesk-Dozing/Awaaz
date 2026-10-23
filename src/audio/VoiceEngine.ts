@@ -11,6 +11,8 @@ export class VoiceEngine {
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private analyserNode: AnalyserNode | null = null;
   private morphChain: MorphChain | null = null;
+  private monitorGainNode: GainNode | null = null;
+  private isMonitoring: boolean = false;
   private isUnlocked: boolean = false;
 
   public async unlockAudioContext(): Promise<AudioContext> {
@@ -66,6 +68,27 @@ export class VoiceEngine {
     // Initialize MorphChain on separate transmit path
     this.morphChain = new MorphChain(this.ctx);
     this.morphChain.connectSource(this.sourceNode);
+
+    // Setup feedback-guarded local monitoring node
+    this.monitorGainNode = this.ctx.createGain();
+    this.monitorGainNode.gain.value = 0; // Muted by default to prevent feedback howl
+    const morphedStream = this.morphChain.getDisguisedStream();
+    const morphedSource = this.ctx.createMediaStreamSource(morphedStream);
+    morphedSource.connect(this.monitorGainNode);
+    this.monitorGainNode.connect(this.ctx.destination);
+  }
+
+  public setLocalMonitoring(enabled: boolean, volume: number = 0.8): void {
+    this.isMonitoring = enabled;
+    if (this.monitorGainNode && this.ctx) {
+      const now = this.ctx.currentTime;
+      const targetGain = enabled ? Math.max(0, Math.min(1.0, volume)) : 0;
+      this.monitorGainNode.gain.setTargetAtTime(targetGain, now, 0.05);
+    }
+  }
+
+  public getIsMonitoring(): boolean {
+    return this.isMonitoring;
   }
 
   public setMask(presetId: string): void {

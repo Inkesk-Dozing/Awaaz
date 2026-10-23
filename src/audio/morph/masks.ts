@@ -107,5 +107,27 @@ export const MASK_PRESETS: Record<string, MaskPreset> = {
     f3: { freq: 2500, gain: 2.5, q: 4 },
     lowPassFreq: 7000,
     fxType: 'none'
+  },
+  chipmunk: {
+    id: 'chipmunk',
+    name: 'Chipmunk',
+    category: 'creature',
+    pitchShift: 6.0,
+    f1: { freq: 850, gain: 5.0, q: 5 },
+    f2: { freq: 2200, gain: 4.5, q: 5 },
+    f3: { freq: 3400, gain: 4.0, q: 4 },
+    lowPassFreq: 9000,
+    fxType: 'none'
+  },
+  demon: {
+    id: 'demon',
+    name: 'Demon / Monster',
+    category: 'creature',
+    pitchShift: -6.0,
+    f1: { freq: 400, gain: 6.0, q: 4 },
+    f2: { freq: 1100, gain: 5.0, q: 4 },
+    f3: { freq: 2100, gain: 4.0, q: 4 },
+    lowPassFreq: 5000,
+    fxType: 'none'
   }
 };
