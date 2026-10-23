@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { voiceEngine } from './audio/VoiceEngine';
 import { useAppStore } from './state/store';
 import { DevWaveformVisualizer } from './ui/components/DevWaveformVisualizer';
+import { LegalDisclaimers } from './ui/components/LegalDisclaimers';
+import { ResilienceManager } from './ui/components/ResilienceManager';
 
 export const App: React.FC = () => {
   const { hasMicPermission, micError, setAudioUnlocked, setMicPermission, setMicError } = useAppStore();
@@ -105,9 +107,8 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      <footer style={{ marginTop: '2.5rem', textAlign: 'center', color: '#475569', fontSize: '0.8rem' }}>
-        Awaaz Architecture Verification · Phase 0 Milestone
-      </footer>
+      <LegalDisclaimers />
+      <ResilienceManager />
     </div>
   );
 };
