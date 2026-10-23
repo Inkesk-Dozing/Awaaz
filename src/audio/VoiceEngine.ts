@@ -2,11 +2,15 @@
  * VoiceEngine: Manages the Web Audio API AudioContext lifecycle,
  * mic stream acquisition with raw hardware constraints, and analysis tap.
  */
+import { MorphChain } from './morph/MorphChain';
+import { MaskPreset, MASK_PRESETS } from './morph/masks';
+
 export class VoiceEngine {
   private ctx: AudioContext | null = null;
   private micStream: MediaStream | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private analyserNode: AnalyserNode | null = null;
+  private morphChain: MorphChain | null = null;
   private isUnlocked: boolean = false;
 
   public async unlockAudioContext(): Promise<AudioContext> {
@@ -56,8 +60,29 @@ export class VoiceEngine {
     this.analyserNode.fftSize = 2048;
     this.analyserNode.smoothingTimeConstant = 0.2;
 
-    // Connect raw mic stream directly to AnalyserNode
+    // Connect raw mic stream directly to AnalyserNode (Analysis path)
     this.sourceNode.connect(this.analyserNode);
+
+    // Initialize MorphChain on separate transmit path
+    this.morphChain = new MorphChain(this.ctx);
+    this.morphChain.connectSource(this.sourceNode);
+  }
+
+  public setMask(presetId: string): void {
+    const preset = MASK_PRESETS[presetId] || MASK_PRESETS.natural;
+    if (this.morphChain) {
+      this.morphChain.applyPreset(preset);
+    }
+  }
+
+  public setCustomMask(preset: MaskPreset): void {
+    if (this.morphChain) {
+      this.morphChain.applyPreset(preset);
+    }
+  }
+
+  public getMorphedStream(): MediaStream | null {
+    return this.morphChain ? this.morphChain.getDisguisedStream() : null;
   }
 
   public getAnalyser(): AnalyserNode | null {
@@ -80,6 +105,10 @@ export class VoiceEngine {
     if (this.micStream) {
       this.micStream.getTracks().forEach((track) => track.stop());
       this.micStream = null;
+    }
+    if (this.morphChain) {
+      this.morphChain.dispose();
+      this.morphChain = null;
     }
     if (this.sourceNode) {
       this.sourceNode.disconnect();
