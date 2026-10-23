@@ -5,6 +5,7 @@ import { DevWaveformVisualizer } from './ui/components/DevWaveformVisualizer';
 import { LegalDisclaimers } from './ui/components/LegalDisclaimers';
 import { ResilienceManager } from './ui/components/ResilienceManager';
 import { StudioPage } from './ui/pages/StudioPage';
+import { CalibrationPage } from './ui/pages/CalibrationPage';
 
 export const App: React.FC = () => {
   const { hasMicPermission, micError, setAudioUnlocked, setMicPermission, setMicError } = useAppStore();
@@ -104,6 +105,7 @@ export const App: React.FC = () => {
             </div>
 
             <DevWaveformVisualizer />
+            <CalibrationPage />
             <StudioPage />
           </div>
         )}
