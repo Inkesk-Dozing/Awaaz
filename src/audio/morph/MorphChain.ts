@@ -108,30 +108,18 @@ export class MorphChain {
       wet: 1.0,
     });
 
+    // Tone.js ToneAudioNode to native Web Audio connection
     try {
-      Tone.connect(this.inputNode as never, this.pitchShiftNode);
-      Tone.connect(this.pitchShiftNode, this.f1Node as never);
-    } catch {
-      const anyNode = this.pitchShiftNode as unknown as {
-        input?: AudioNode;
-        output?: AudioNode;
-      };
-      if (anyNode.input && anyNode.output && this.inputNode) {
-        this.inputNode.connect(anyNode.input);
-        anyNode.output.connect(this.f1Node);
-      } else if (this.inputNode) {
-        this.inputNode.connect(this.f1Node);
+      if ((this.pitchShiftNode as any).input && (this.pitchShiftNode as any).output) {
+        this.inputNode.connect((this.pitchShiftNode as any).input);
+        (this.pitchShiftNode as any).output.connect(this.f1Node);
+      } else {
+        Tone.connect(this.inputNode as any, this.pitchShiftNode as any);
+        Tone.connect(this.pitchShiftNode as any, this.f1Node as any);
       }
-    }
-  }
-
-  private applyPitchRatio(semitones: number): void {
-    const clampedSemitones = Math.max(-6, Math.min(6, semitones));
-    if (this.rubberBandNode && this.isWasmReady) {
-      const ratio = Math.pow(2, clampedSemitones / 12);
-      this.rubberBandNode.setPitch(ratio);
-    } else if (this.pitchShiftNode) {
-      this.pitchShiftNode.pitch = clampedSemitones;
+    } catch {
+      // Fallback: direct connection from mic input into formant cascade
+      this.inputNode.connect(this.f1Node);
     }
   }
 
