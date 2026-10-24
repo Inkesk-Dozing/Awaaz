@@ -1,10 +1,16 @@
 import React, { useState, useEffect } from 'react';
+import { useAppStore } from '../../state/store';
 import { voiceEngine } from '../../audio/VoiceEngine';
 import { audioRecorder } from '../../audio/recorder';
 import { MASK_PRESETS, MaskPreset } from '../../audio/morph/masks';
+import {
+  OUTPUT_PROFILES,
+  OutputProfileId,
+} from '../../audio/mastering/targets';
 import { setupStudioHotkeys, DEFAULT_HOTKEYS } from '../studio/hotkeys';
 
 export const StudioPage: React.FC = () => {
+  const { outputProfile } = useAppStore();
   const [activePresetId, setActivePresetId] = useState<string>('natural');
   const [manualPitch, setManualPitch] = useState<number>(0);
   const [vtlScale, setVtlScale] = useState<number>(1.0); // 0.8x to 1.25x
@@ -13,6 +19,7 @@ export const StudioPage: React.FC = () => {
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
   const [shareSuccess, setShareSuccess] = useState<boolean>(false);
+  const [masterProfile, setMasterProfile] = useState<OutputProfileId>(voiceEngine.getOutputProfileId());
 
   // Setup hotkey listener
   useEffect(() => {
@@ -53,6 +60,15 @@ export const StudioPage: React.FC = () => {
       f3: { ...basePreset.f3, freq: basePreset.f3.freq * scale },
     };
     voiceEngine.setCustomMask(modified);
+  };
+
+  const handleMasterProfileChange = (id: OutputProfileId) => {
+    setMasterProfile(id);
+    voiceEngine.setOutputProfile(id);
+    // Re-apply saved calibration gains on top of the new compressor character.
+    if (outputProfile) {
+      voiceEngine.applyOutputCalibration(outputProfile);
+    }
   };
 
   const handleToggleMonitoring = () => {
@@ -269,76 +285,224 @@ export const StudioPage: React.FC = () => {
             />
           </div>
         </div>
+
+        {/* Mastering / output profile (broadcast-style) */}
+        <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid #1e293b' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#cbd5e1' }}>
+              OUTPUT MASTERING PROFILE
+            </div>
+            {outputProfile && (
+              <div style={{ fontSize: '0.68rem', color: '#4ade80', fontFamily: 'monospace' }}>
+                cal: pre {outputProfile.preGainDb >= 0 ? '+' : ''}{outputProfile.preGainDb} dB · makeup{' '}
+                {outputProfile.makeupGainDb >= 0 ? '+' : ''}{outputProfile.makeupGainDb} dB
+              </div>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {(Object.keys(OUTPUT_PROFILES) as OutputProfileId[]).map((id) => {
+              const p = OUTPUT_PROFILES[id];
+              const selected = masterProfile === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => handleMasterProfileChange(id)}
+                  style={{
+                    background: selected ? '#0284c7' : '#0f172a',
+                    border: `1px solid ${selected ? '#38bdf8' : '#1e293b'}`,
+                    color: selected ? '#fff' : '#e2e8f0',
+                    borderRadius: '8px',
+                    padding: '0.45rem 0.9rem',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                  title={`${p.targetOutputRmsDb} dBFS RMS · peak ≤ ${p.peakCeilingDb} dBFS · ratio ${p.compressorRatio}:1`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+          <p style={{ margin: '0.5rem 0 0', fontSize: '0.7rem', color: '#64748b' }}>
+            Compressor + soft-clip limiter on the morph path. Run{' '}
+            <strong style={{ color: '#94a3b8' }}>Calibrate Output Level</strong> on the Calibration
+            page for mic-specific gain staging.
+          </p>
+        </div>
       </div>
 
       {/* Monitoring & Recording Toolbar */}
+      {/* Dedicated Audio Output Monitoring & Recording Console */}
       <div
         style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '1rem',
-          paddingTop: '1rem',
-          borderTop: '1px solid #1e293b',
+          background: 'linear-gradient(180deg, #0f172a 0%, #080e1e 100%)',
+          borderRadius: '12px',
+          border: `1px solid ${isMonitoring ? '#059669' : '#1e293b'}`,
+          padding: '1.25rem',
+          boxShadow: isMonitoring ? '0 0 20px rgba(16, 185, 129, 0.15)' : 'none',
+          transition: 'all 0.3s ease',
         }}
       >
-        {/* Local Monitoring Gate */}
-        <button
-          onClick={handleToggleMonitoring}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            padding: '0.5rem 1rem',
-            borderRadius: '8px',
-            backgroundColor: isMonitoring ? '#166534' : '#1e293b',
-            border: `1px solid ${isMonitoring ? '#22c55e' : '#334155'}`,
-            color: '#fff',
-            fontSize: '0.85rem',
-            cursor: 'pointer',
-          }}
-        >
-          <span>🎧</span>
-          <span>{isMonitoring ? 'Monitoring Active (Mute)' : 'Monitor Output'}</span>
-        </button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: '10px',
+                  height: '10px',
+                  borderRadius: '50%',
+                  backgroundColor: isMonitoring ? '#10b981' : '#64748b',
+                  boxShadow: isMonitoring ? '0 0 10px #10b981' : 'none',
+                }}
+              />
+              <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f8fafc' }}>
+                AUDIO OUTPUT STATUS: {isMonitoring ? 'LIVE MONITORING ACTIVE' : 'MUTED (STANDBY)'}
+              </span>
+            </div>
+            <p style={{ margin: '0.25rem 0 0', fontSize: '0.75rem', color: '#94a3b8' }}>
+              {isMonitoring
+                ? 'Your morphed voice is streaming directly to your headphones in real time.'
+                : 'Turn on monitoring below to hear your pitch and formants.'}
+            </p>
+          </div>
 
-        {/* Morphed Audio Recording */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          {/* Large Primary Toggle */}
           <button
-            onClick={handleToggleRecord}
+            onClick={handleToggleMonitoring}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '0.5rem',
-              padding: '0.5rem 1.1rem',
-              borderRadius: '8px',
-              backgroundColor: isRecording ? '#dc2626' : '#0284c7',
+              padding: '0.65rem 1.4rem',
+              borderRadius: '10px',
+              backgroundColor: isMonitoring ? '#dc2626' : '#10b981',
               border: 'none',
-              color: '#fff',
-              fontSize: '0.85rem',
-              fontWeight: 600,
+              color: '#ffffff',
+              fontSize: '0.9rem',
+              fontWeight: 700,
               cursor: 'pointer',
-              boxShadow: isRecording ? '0 0 15px rgba(239, 68, 68, 0.5)' : 'none',
+              boxShadow: isMonitoring ? '0 4px 14px rgba(220, 38, 38, 0.4)' : '0 4px 14px rgba(16, 185, 129, 0.4)',
+              transition: 'all 0.2s ease',
             }}
           >
-            <span>{isRecording ? '⏹' : '⏺'}</span>
-            <span>{isRecording ? 'Stop Recording' : 'Record Morphed Audio'}</span>
+            <span>{isMonitoring ? '🔇 Mute Audio Monitor' : '🎧 Listen to Morphed Output'}</span>
           </button>
+        </div>
 
-          {recordedAudioUrl && (
-            <a
-              href={recordedAudioUrl}
-              download={`awaaz-morph-${activePresetId}-${Date.now()}.webm`}
+        {/* Volume & Recording Bar */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: '#040711',
+            borderRadius: '8px',
+            padding: '0.75rem 1rem',
+            border: '1px solid #1e293b',
+            flexWrap: 'wrap',
+            gap: '1rem',
+          }}
+        >
+          {/* Active Preset Tag */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: '#cbd5e1' }}>
+            <span>Active Mask:</span>
+            <span
               style={{
-                color: '#38bdf8',
-                fontSize: '0.8rem',
-                textDecoration: 'underline',
+                background: '#0284c7',
+                color: '#fff',
+                padding: '0.2rem 0.6rem',
+                borderRadius: '6px',
+                fontWeight: 600,
+                fontSize: '0.75rem',
               }}
             >
-              ⬇ Export WebM
-            </a>
-          )}
+              {MASK_PRESETS[activePresetId]?.name || 'Natural'}
+            </span>
+            <span style={{ color: '#38bdf8', fontFamily: 'monospace' }}>
+              ({manualPitch > 0 ? `+${manualPitch.toFixed(1)}` : manualPitch.toFixed(1)} ST)
+            </span>
+            <span
+              style={{
+                background: '#1e293b',
+                color: '#94a3b8',
+                padding: '0.2rem 0.5rem',
+                borderRadius: '4px',
+                fontSize: '0.7rem',
+                fontFamily: 'monospace',
+                marginLeft: '0.5rem',
+              }}
+            >
+              DSP: C++ WASM
+            </span>
+          </div>
+
+          {/* Master Output Makeup & Broadcast Limiter Trim */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.75rem', color: '#94a3b8' }}>
+            <span>Master Level:</span>
+            <input
+              type="range"
+              min="-6"
+              max="12"
+              step="0.5"
+              defaultValue="3.5"
+              onChange={(e) => {
+                const val = parseFloat(e.target.value);
+                voiceEngine.setMasterMakeupGain(val);
+              }}
+              style={{ width: '80px', accentColor: '#38bdf8' }}
+              title="Master Broadcast Makeup Gain (dB)"
+            />
+            <span style={{ color: '#10b981', fontWeight: 600, fontSize: '0.7rem' }}>
+              -1 dBFS Clamped
+            </span>
+          </div>
+
+          {/* Recording Controls */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <button
+              onClick={handleToggleRecord}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                padding: '0.45rem 1rem',
+                borderRadius: '8px',
+                backgroundColor: isRecording ? '#dc2626' : '#1e293b',
+                border: `1px solid ${isRecording ? '#ef4444' : '#334155'}`,
+                color: '#fff',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: isRecording ? '0 0 12px rgba(239, 68, 68, 0.6)' : 'none',
+              }}
+            >
+              <span>{isRecording ? '⏹' : '⏺'}</span>
+              <span>{isRecording ? 'Stop Recording' : 'Record Snippet'}</span>
+            </button>
+
+            {recordedAudioUrl && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <audio controls src={recordedAudioUrl} style={{ height: '30px', width: '180px' }} />
+                <a
+                  href={recordedAudioUrl}
+                  download={`awaaz-morphed-${activePresetId}-${Date.now()}.webm`}
+                  style={{
+                    backgroundColor: '#0284c7',
+                    color: '#fff',
+                    padding: '0.35rem 0.65rem',
+                    borderRadius: '6px',
+                    fontSize: '0.75rem',
+                    textDecoration: 'none',
+                    fontWeight: 600,
+                  }}
+                >
+                  ⬇ Save
+                </a>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

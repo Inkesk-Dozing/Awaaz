@@ -18,8 +18,17 @@ All DSP is pure functions over `Float32Array` → testable without a browser aud
 | VAD pauses | scripted speech-like bursts + gaps | pause count/durations match ground truth |
 | Stress composite | synthetic z-score inputs | monotonic in each feature; bounded 0–100 |
 | Matcher | synthetic "target" vs "source" sines | semitones ≈ 12·log2(f_t/f_s) |
+| Metering | unit sine 1.0 amp | RMS ≈ −3.01 dBFS, peak ≈ 0 dBFS |
+| Output calibration solver | quiet mic (−30 dBFS) | preGain ≈ +12 dB, not clamped |
+| Output calibration solver | peak-exceeding case | makeup reduced so peak ≤ ceiling |
+| Output calibration solver | NaN inputs | finite gains returned |
+| Spectral tilt (`bands.ts`) | 200 Hz vs 3500 Hz sines | tilt(low) ≫ tilt(high) |
+| Saturation curves | tanh + bitcrush builders | endpoints within ±1, monotonic staircase |
+| Output profiles | Broadcast/Clean/Punchy | ratio > 1, peak ceiling ≤ 0 |
 
 Regression fixtures: short recorded `.wav` blobs (committed) with stored expected feature snapshots (loose tolerances for cross-browser float variance).
+
+New test files: `metering.test.ts`, `output_calibration.test.ts`, `bands.test.ts`, `fx_mastering.test.ts` (plus existing `masks.test.ts`, `matcher.test.ts`).
 
 Run: `npm test` in CI (GitHub Actions on push).
 

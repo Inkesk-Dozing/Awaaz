@@ -28,6 +28,8 @@ Full docs live in [`docs/`](docs/README.md):
 | [Testing](docs/08-testing-strategy.md) | Unit tests, playtests |
 | [Deploy & cost](docs/09-deployment-and-cost.md) | $0 stack, steps |
 | [Risks](docs/10-risk-register.md) | Register + assumptions |
+| [Output calibration](docs/11-voice-output-calibration.md) | Broadcast mastering, gain staging, pro levels |
+| [VoiceStudio research](docs/research/voicestudio/README.md) | External reference notes |
 
 ## Stack
 

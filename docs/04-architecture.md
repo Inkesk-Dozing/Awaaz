@@ -23,14 +23,27 @@
 ```
 src/
   audio/
-    VoiceEngine.ts          // graph wiring, init, teardown
+    VoiceEngine.ts          // graph wiring, init, teardown, output taps
+    calibration/
+      outputCalibration.ts  // PURE solver: levels → pre-gain + makeup recipe
+      measure.ts            // dual-analyser voiced measurement (rAF loop)
+    mastering/
+      outputStage.ts        // preGain → compressor → makeup → soft-clip limiter
+      metering.ts           // peak/RMS dBFS helpers (pure)
+      targets.ts            // Broadcast/Clean/Punchy profiles + default targets
     morph/
       masks.ts              // preset table (pitch, formants, FX)
       matcher.ts            // Voice Twin Matcher (sample → recipe)
+      MorphChain.ts         // full routing graph incl. FX insert + OutputStage
+      RubberBandNode.ts     // C++ WASM pitch/tempo worklet wrapper
+      fx/
+        robotFx.ts          // ring-mod + bitcrush insert
+        radioFx.ts          // bandpass window + static bed
+        saturation.ts       // tanh/bitcrush curve builders
     dsp/                    // PURE functions — unit-tested, future WASM seam
       yin.ts
       pulses.ts
-      vad.ts
+      bands.ts              // RBJ bandpass + spectral tilt (matcher)
       jitter.ts
       shimmer.ts
       hnr.ts
@@ -38,9 +51,8 @@ src/
       pauses.ts
       speechRate.ts
       flinch.ts
-      baseline.ts           // calibration profiles
+      baseline.ts           // calibration profiles (stress)
       stress.ts             // z-scores, sigmoid, dramaNoise composite
-    worklets/               // optional AudioWorklet processors (post-v1)
   net/
     PeerNet.ts              // PeerJS wrapper: host/join, mesh audio, star data
     protocol.ts             // typed, versioned message types
@@ -55,7 +67,7 @@ src/
     pages/                  // Home, Lobby, Calibration, Disguise, Game, Reveal
     hud/                    // PolygraphHUD, Gauge, StripChart, QualityBadge
   state/
-    store.ts                // zustand slices
+    store.ts                // zustand slices (baseline + output profile, persisted)
 tests/
   dsp/                      // vitest fixtures & synthetic-signal tests
 ```
@@ -65,19 +77,25 @@ tests/
 ```
 MediaStreamSource(mic, constraints all-false)
  ├─► AnalyserNode(fft 2048)                    // RAW path → dsp/* on main thread @ ~15 Hz
- └─► PitchShift (Tone, ±6 st, window 0.04–0.06)
+ ├─► PreMorphAnalyser                          // RAW tap for output calibration input RMS
+ └─► PitchShift (RubberBand WASM preferred, Tone fallback ±6 st, window 0.05)
       └─► BiquadFilter F1 (peaking)            // formant anchors per mask
            └─► BiquadFilter F2 (peaking)
                 └─► BiquadFilter F3 (peaking)
-                     └─► BiquadFilter LP (7.5 kHz)
-                          └─► FX (ring-mod Gain / WaveShaper bitcrush)  // mask-dependent
-                               └─► MediaStreamDestination → WebRTC send
+                     └─► BiquadFilter LP
+                          └─► FX insert bus    // robot (ring-mod) | radio (bandpass+static) | bypass
+                               └─► saturator   // gentle tanh warmth
+                                    └─► OutputStage   // preGain → compressor → makeup → soft-clip
+                                         ├─► MediaStreamDestination → WebRTC send
+                                         ├─► OutputAnalyser (calibration output RMS/peak)
+                                         └─► Monitor tap → (muted) Gain → speakers
 ```
 
 Rules:
 - Analysis **never** runs on the morphed signal.
-- Local monitor (C1) is optional and off by default; if enabled, low-level, headphones-only.
+- Local monitor (C1) is optional and off by default; if enabled, headphones-only, capped ≤ 0.7 gain.
 - All DSP modules are pure functions over typed arrays → trivially portable to WASM later.
+- Output stage & calibration: [11 — voice output calibration](11-voice-output-calibration.md).
 
 ## Data flow: telemetry → verdict
 

@@ -16,6 +16,13 @@
 | 8 | [08-testing-strategy.md](08-testing-strategy.md) | Unit tests, browser matrix, playtests |
 | 9 | [09-deployment-and-cost.md](09-deployment-and-cost.md) | $0 stack, deploy steps, privacy |
 | 10 | [10-risk-register.md](10-risk-register.md) | Risks, mitigations, assumptions |
+| 11 | [11-voice-output-calibration.md](11-voice-output-calibration.md) | Output staging, mastering profiles, pro calibration |
+
+## Research notes
+
+| Folder | Topic |
+|--------|-------|
+| [research/voicestudio/](research/voicestudio/README.md) | Analysis of [VoiceStudio](https://github.com/debpalash/VoiceStudio): mastering, signal checks, metrics, docs structure — and what Awaaz borrowed |
 
 ## One-line pitch
 
