@@ -60,8 +60,18 @@ export class MorphChain {
     });
 
     // Tone.js ToneAudioNode to native Web Audio connection
-    Tone.connect(this.inputNode, this.pitchShiftNode);
-    Tone.connect(this.pitchShiftNode, this.f1Node);
+    try {
+      if ((this.pitchShiftNode as any).input && (this.pitchShiftNode as any).output) {
+        this.inputNode.connect((this.pitchShiftNode as any).input);
+        (this.pitchShiftNode as any).output.connect(this.f1Node);
+      } else {
+        Tone.connect(this.inputNode as any, this.pitchShiftNode as any);
+        Tone.connect(this.pitchShiftNode as any, this.f1Node as any);
+      }
+    } catch {
+      // Fallback: direct connection from mic input into formant cascade
+      this.inputNode.connect(this.f1Node);
+    }
   }
 
   public applyPreset(preset: MaskPreset, transitionTime: number = 0.05): void {
