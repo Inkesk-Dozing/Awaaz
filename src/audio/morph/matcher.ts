@@ -5,13 +5,14 @@
 
 import { MaskPreset } from './masks';
 import { yinPitch } from '../dsp/yin';
+import { spectralTilt } from '../dsp/bands';
 
 export interface AcousticSampleProfile {
   medianPitch: number;      // Hz
   pitchMin: number;         // Hz
   pitchMax: number;         // Hz
   formantShiftEstimate: number; // Multiplier e.g. 1.15
-  spectralTilt: number;     // Energy ratio (low vs high)
+  spectralTilt: number;     // Energy ratio (low vs high bandpass)
   voicingCoverage: number;  // Ratio of voiced frames 0.0 - 1.0
 }
 
@@ -46,8 +47,8 @@ export function profileAcousticBuffer(
 
   const pitchSamples: number[] = [];
   let voicedCount = 0;
-  let lowEnergySum = 0;
-  let highEnergySum = 0;
+  let tiltSum = 0;
+  let tiltFrames = 0;
 
   for (let f = 0; f < totalFrames; f++) {
     const start = f * hopSize;
@@ -57,16 +58,9 @@ export function profileAcousticBuffer(
     if (yin.pitch > 50 && yin.confidence > 0.6) {
       pitchSamples.push(yin.pitch);
       voicedCount++;
-    }
-
-    // Rough spectral tilt estimation via low/high band energy sum
-    for (let i = 0; i < slice.length; i++) {
-      const val = slice[i] * slice[i];
-      if (i < slice.length / 4) {
-        lowEnergySum += val;
-      } else {
-        highEnergySum += val;
-      }
+      // Real frequency-band tilt (RBJ bandpass low ≈400 Hz vs high ≈3500 Hz).
+      tiltSum += spectralTilt(slice, sampleRate);
+      tiltFrames++;
     }
   }
 
@@ -77,7 +71,9 @@ export function profileAcousticBuffer(
   const pitchMin = pitchSamples.length > 0 ? pitchSamples[0] : 120;
   const pitchMax = pitchSamples.length > 0 ? pitchSamples[pitchSamples.length - 1] : 240;
 
-  const spectralTilt = highEnergySum > 0 ? lowEnergySum / highEnergySum : 1.0;
+  const tilt = tiltFrames > 0
+    ? Math.min(10, Math.max(0.1, tiltSum / tiltFrames))
+    : 1.0;
   const voicingCoverage = voicedCount / totalFrames;
 
   // Estimate vocal tract scaling from fundamental pitch proxy
@@ -88,7 +84,7 @@ export function profileAcousticBuffer(
     pitchMin,
     pitchMax,
     formantShiftEstimate,
-    spectralTilt,
+    spectralTilt: tilt,
     voicingCoverage
   };
 }

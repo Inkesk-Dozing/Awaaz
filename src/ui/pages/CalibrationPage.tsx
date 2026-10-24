@@ -7,6 +7,11 @@ import { jitterLocal } from '../../audio/dsp/jitter';
 import { shimmerLocal } from '../../audio/dsp/shimmer';
 import { calculateHNR } from '../../audio/dsp/hnr';
 import { computeBaseline, MetricSnapshot, VocalBaseline } from '../../audio/dsp/baseline';
+import {
+  solveOutputCalibration,
+  OutputCalibrationProfile,
+} from '../../audio/calibration/outputCalibration';
+import { measureVoicedLevels } from '../../audio/calibration/measure';
 
 export const CALIBRATION_SCRIPT =
   "When the sunlight strikes raindrops in the air, they act as a prism and form a rainbow. The rainbow is a division of white light into many beautiful colors. These take the shape of a long round arch, with its path high above, and its two ends apparently beyond the horizon.";
@@ -20,12 +25,15 @@ export const CalibrationPage: React.FC<CalibrationPageProps> = ({
   onCalibrationComplete,
   targetSeconds = 15,
 }) => {
-  const { vocalBaseline, setVocalBaseline } = useAppStore();
+  const { vocalBaseline, setVocalBaseline, outputProfile, setOutputProfile } = useAppStore();
   const [isCalibrating, setIsCalibrating] = useState<boolean>(false);
   const [elapsedVoicedSec, setElapsedVoicedSec] = useState<number>(0);
   const [isVoiced, setIsVoiced] = useState<boolean>(false);
   const [snrDb, setSnrDb] = useState<number>(30);
   const [snapshots, setSnapshots] = useState<MetricSnapshot[]>([]);
+  const [isOutputCalibrating, setIsOutputCalibrating] = useState<boolean>(false);
+  const [outputProgress, setOutputProgress] = useState<number>(0);
+  const [outputError, setOutputError] = useState<string | null>(null);
 
   const animFrameRef = useRef<number | null>(null);
   const snapshotsRef = useRef<MetricSnapshot[]>([]);
@@ -130,6 +138,45 @@ export const CalibrationPage: React.FC<CalibrationPageProps> = ({
     }
   };
 
+  const runOutputCalibration = async () => {
+    const inputAnalyser = voiceEngine.getPreMorphAnalyser() ?? voiceEngine.getAnalyser();
+    const outputAnalyser = voiceEngine.getOutputAnalyser();
+    if (!inputAnalyser || !outputAnalyser) {
+      setOutputError('Microphone not ready — unlock audio and grant mic access first.');
+      return;
+    }
+
+    setOutputError(null);
+    setIsOutputCalibrating(true);
+    setOutputProgress(0);
+
+    const durationMs = 4000;
+    const start = performance.now();
+    const progressTimer = window.setInterval(() => {
+      setOutputProgress(Math.min(100, Math.round(((performance.now() - start) / durationMs) * 100)));
+    }, 100);
+
+    try {
+      const measured = await measureVoicedLevels(inputAnalyser, outputAnalyser, durationMs);
+      const solved: OutputCalibrationProfile = solveOutputCalibration({
+        inputRmsDb: measured.inputRmsDb,
+        outputRmsDb: measured.outputRmsDb,
+        outputPeakDb: measured.outputPeakDb,
+      });
+      voiceEngine.applyOutputCalibration(solved);
+      setOutputProfile(solved);
+      if (measured.voicedFrames === 0) {
+        setOutputError('No voiced audio detected — try speaking louder for the full window.');
+      }
+    } catch (err) {
+      setOutputError(err instanceof Error ? err.message : String(err));
+    } finally {
+      window.clearInterval(progressTimer);
+      setOutputProgress(100);
+      setIsOutputCalibrating(false);
+    }
+  };
+
   return (
     <div
       style={{
@@ -147,11 +194,16 @@ export const CalibrationPage: React.FC<CalibrationPageProps> = ({
     >
       <div style={{ borderBottom: '1px solid #1e293b', paddingBottom: '0.85rem', marginBottom: '1.25rem' }}>
         <h2 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 800, color: '#38bdf8' }}>
-          Vocal Calibration Protocol
+          Calibration Protocol
         </h2>
         <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: '#94a3b8' }}>
-          15-second guided phonation reading to establish your personal acoustic baseline
+          Stress baseline (polygraph) + output level (broadcast-style mastering gains)
         </p>
+      </div>
+
+      {/* Section 1: Stress baseline */}
+      <div style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.08em', color: '#7dd3fc', marginBottom: '0.75rem' }}>
+        1 · STRESS BASELINE
       </div>
 
       {/* Script Reading Prompt Card */}
@@ -256,6 +308,67 @@ export const CalibrationPage: React.FC<CalibrationPageProps> = ({
         {vocalBaseline && (
           <div style={{ fontSize: '0.75rem', color: '#4ade80', fontFamily: 'monospace' }}>
             ✓ BASELINE: F0={vocalBaseline.meanPitch.toFixed(0)}Hz (±{vocalBaseline.stdPitch.toFixed(1)}) | Jitter={vocalBaseline.meanJitter.toFixed(2)}%
+          </div>
+        )}
+      </div>
+
+      {/* Section 2: Output level calibration */}
+      <div
+        style={{
+          marginTop: '1.75rem',
+          paddingTop: '1.25rem',
+          borderTop: '1px solid #1e293b',
+        }}
+      >
+        <div style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.08em', color: '#7dd3fc', marginBottom: '0.5rem' }}>
+          2 · OUTPUT LEVEL (PRO MASTERING)
+        </div>
+        <p style={{ margin: '0 0 1rem', fontSize: '0.85rem', color: '#94a3b8', lineHeight: 1.5 }}>
+          Speak naturally for ~4 seconds. Awaaz measures your raw mic level and the morphed
+          output, then solves input staging + makeup gain so the disguised voice sits at a
+          stable broadcast level (target ≈ −16 dBFS RMS, peak ≤ −1 dBFS).
+        </p>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          <button
+            onClick={runOutputCalibration}
+            disabled={isOutputCalibrating}
+            style={{
+              background: isOutputCalibrating ? '#1e293b' : '#7c3aed',
+              border: 'none',
+              color: '#fff',
+              padding: '0.65rem 1.4rem',
+              borderRadius: '8px',
+              fontSize: '0.9rem',
+              fontWeight: 600,
+              cursor: isOutputCalibrating ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {isOutputCalibrating ? `Measuring… ${outputProgress}%` : outputProfile ? 'Recalibrate Output Level' : 'Calibrate Output Level'}
+          </button>
+
+          {outputProfile && (
+            <div
+              style={{
+                fontSize: '0.72rem',
+                color: outputProfile.clamped ? '#fbbf24' : '#4ade80',
+                fontFamily: 'monospace',
+                lineHeight: 1.5,
+              }}
+            >
+              ✓ OUTPUT: pre {outputProfile.preGainDb >= 0 ? '+' : ''}
+              {outputProfile.preGainDb.toFixed(1)} dB · makeup {outputProfile.makeupGainDb >= 0 ? '+' : ''}
+              {outputProfile.makeupGainDb.toFixed(1)} dB · q={outputProfile.quality.toFixed(2)}
+              {outputProfile.notes.length > 0 && (
+                <div style={{ color: '#94a3b8' }}>{outputProfile.notes.join(' · ')}</div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {outputError && (
+          <div style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: '#f87171' }}>
+            {outputError}
           </div>
         )}
       </div>

@@ -30,6 +30,19 @@ Tags: **`[v1]`** = Week-1 scope · **`[post-v1]`** = designed, parked for later.
 | B5 | Harmony / detuned double | post-v1 |
 | B6 | Vocoder mode (synth carrier) | post-v1 |
 
+### B2′. Output mastering & calibration
+
+| ID | Feature | Tag |
+|----|---------|-----|
+| B20 | Output stage: compressor → makeup gain → soft-clip limiter on the morph path | v1 |
+| B21 | Mastering profiles: Broadcast / Clean / Punchy (plain-language tiers) | v1 |
+| B22 | Output level calibration: 4 s voiced measurement → input pre-gain + output makeup, persisted per device | v1 |
+| B23 | Live peak/RMS metering + honest clamp/quality notes | v1 |
+| B24 | Signal-health checks like VoiceStudio "Check audio" (offline scan of recorded takes) | post-v1 |
+| B25 | True LUFS-style loudness metering | post-v1 |
+
+See [11 — voice output calibration](11-voice-output-calibration.md).
+
 ### C. Studio UX
 
 | ID | Feature | Tag |

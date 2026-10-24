@@ -8,13 +8,19 @@ Two engines share one mic: **Morph** (changes how you sound) and **Polygraph** (
 
 ### 1.1 Signal chain
 ```
-mic → PitchShift → F1 peaking → F2 peaking → F3 peaking → LP 7.5 kHz → FX → destination
+mic → PitchShift → F1 peaking → F2 peaking → F3 peaking → LP → FX insert → saturator
+    → OutputStage (preGain → compressor → makeup → soft-clip) → WebRTC + monitor tap
 ```
 
+- **PitchShift:** RubberBand C++ WASM AudioWorklet preferred (`public/rubberband-processor.js`, `setHighQuality(true)`); Tone.js fallback with `windowSize = 0.05` s.
+- **FX insert:** `robot` (ring-mod + bitcrush), `radio` (bandpass + static bed), or dry bypass — armed only when the preset declares it.
+- **OutputStage:** broadcast-style mastering — see [11 — voice output calibration](11-voice-output-calibration.md).
+
 ### 1.2 Pitch shifting
-- **Library:** Tone.js `PitchShift` (delay-line / sawtooth method). `windowSize` 0.04–0.06 s for voice.
-- **Range:** cap at **±6 semitones** in v1 (±8 artifacts audibly). `setTargetAtTime` glide 50 ms.
-- **Upgrade path:** SoundTouchJS AudioWorklet (WSOLA) if artifacts too strong; custom granular ("Jungle") as fallback.
+- **Primary:** RubberBand WASM worklet (WSOLA/formant-aware) — ratio = `2^(st/12)`, high-quality mode.
+- **Fallback:** Tone.js `PitchShift` (delay-line), `windowSize = 0.05` s for voice.
+- **Range:** cap at **±6 semitones** in v1 (±8 artifacts audibly). Preset changes glide via `setTargetAtTime`.
+- **Upgrade path:** SoundTouchJS AudioWorklet if needed; custom granular ("Jungle") as last resort.
 
 ### 1.3 Formant simulation (vocal-tract length)
 Male tract ≈ 17 cm (lower resonances); female ≈ 14 cm (×1.15–1.20 higher). Approximate with 3 peaking biquads anchored near F1/F2/F3:
@@ -30,9 +36,16 @@ Male tract ≈ 17 cm (lower resonances); female ≈ 14 cm (×1.15–1.20 higher)
 - Preset changes glide with `setTargetAtTime(…, t, 0.05)` → no clicks.
 
 ### 1.4 FX modules
-- **Radio:** bandpass ~300–3000 Hz + looped static bed + optional squelch blip on speech onset.
-- **Robot/Cyborg:** ring modulator = `OscillatorNode(freq 30–80 Hz)` → `GainNode.gain` (audio-rate AM); bitcrush via `WaveShaper` quantization curve.
-- **Saturation:** soft-clip `WaveShaper` (tanh-like) after LP for warmth.
+- **Radio:** `RadioFx` insert — highpass ~350 Hz + lowpass ~3 kHz + mid presence bump (~1.8 kHz, +4 dB) + looped white-noise static bed (~−32 dB). Squelch blip: post-v1.
+- **Robot/Cyborg:** `RobotFx` insert — audio-rate ring modulator (`OscillatorNode` 30–80 Hz → `GainNode.gain` audio param) mixed 15 % dry / 85 % wet for intelligibility, plus optional 6-bit `WaveShaper` bitcrush staircase.
+- **Saturation:** always-on gentle tanh `WaveShaper` (drive 1.05, 2× oversample) for warmth after the FX insert.
+- **Preset changes** tear down and rebuild only the armed FX nodes; bypass is a direct `GainNode` through-path.
+
+### 1.4b Output stage (mastering)
+- Chain: **preGain → DynamicsCompressor → makeup gain → tanh soft-clip limiter → destination**.
+- Targets: input ≈ −18 dBFS RMS, output ≈ −16 dBFS RMS, peak ≤ −1 dBFS (Broadcast profile).
+- Profiles + calibration solver: `src/audio/mastering/targets.ts`, `src/audio/calibration/outputCalibration.ts`.
+- Full guide: [11 — voice output calibration](11-voice-output-calibration.md).
 
 ### 1.5 Latency budget (honest)
 | Stage | Latency |

@@ -44,22 +44,22 @@ export const MASK_PRESETS: Record<string, MaskPreset> = {
     id: 'female_morph',
     name: 'Feminine Shift',
     category: 'gender',
-    pitchShift: 4.5, // +4.5 semitones
-    f1: { freq: 650, gain: 4.0, q: 5 },
-    f2: { freq: 1770, gain: 4.0, q: 5 },
-    f3: { freq: 2950, gain: 3.0, q: 4 },
-    lowPassFreq: 7500,
+    pitchShift: 2.8, // Natural +2.8 semitones (avoids chipmunk metallic phase artifacts)
+    f1: { freq: 620, gain: 2.5, q: 2.0 }, // Broad natural vocal tract resonance
+    f2: { freq: 1750, gain: 2.5, q: 2.2 },
+    f3: { freq: 2850, gain: 1.8, q: 2.5 },
+    lowPassFreq: 11000, // Preserve natural high-frequency breath and sibilants
     fxType: 'none'
   },
   male_morph: {
     id: 'male_morph',
     name: 'Masculine Shift',
     category: 'gender',
-    pitchShift: -4.5, // -4.5 semitones
-    f1: { freq: 500, gain: 4.0, q: 5 },
-    f2: { freq: 1450, gain: 4.0, q: 5 },
-    f3: { freq: 2450, gain: 3.0, q: 4 },
-    lowPassFreq: 7000,
+    pitchShift: -2.8, // Natural -2.8 semitones (rich chest resonance without robotic buzz)
+    f1: { freq: 480, gain: 2.8, q: 1.8 }, // Warm chest resonance
+    f2: { freq: 1400, gain: 2.0, q: 2.0 },
+    f3: { freq: 2400, gain: 1.5, q: 2.2 },
+    lowPassFreq: 9500, // Gentle natural chest roll-off
     fxType: 'none'
   },
   robot_cyborg: {
