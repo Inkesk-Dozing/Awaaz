@@ -123,6 +123,20 @@ export class MorphChain {
     }
   }
 
+  private applyPitchRatio(semitones: number): void {
+    const clampedSemitones = Math.max(-6, Math.min(6, semitones));
+    if (this.rubberBandNode && this.isWasmReady) {
+      const ratio = Math.pow(2, clampedSemitones / 12);
+      this.rubberBandNode.setPitch(ratio);
+    } else if (this.pitchShiftNode) {
+      this.pitchShiftNode.pitch = clampedSemitones;
+    }
+  }
+
+  public isUsingWasm(): boolean {
+    return this.isWasmReady;
+  }
+
   public applyPreset(preset: MaskPreset, transitionTime: number = 0.05): void {
     this.activePreset = preset;
     const now = this.ctx.currentTime;
